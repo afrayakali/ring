@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AFRA: NEON DYNAMICS</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        :root { --neon-blue: #00f2ff; --neon-pink: #ff00ff; }
+        body { margin: 0; background: #000; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; touch-action: none; }
+        canvas { display: block; }
+
+        /* UI Layer */
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        .pointer { pointer-events: auto; cursor: pointer; }
+
+        /* Header */
+        .header { display: flex; justify-content: space-between; padding: 25px; align-items: center; }
+        .author-link { color: var(--neon-blue); text-decoration: none; font-weight: bold; font-size: 16px; text-shadow: 0 0 10px var(--neon-blue); letter-spacing: 1px; }
+
+        /* Score */
+        .score-container { text-align: center; margin-top: 10px; font-size: 50px; font-weight: 200; opacity: 0.6; letter-spacing: 5px; }
+
+        /* Settings Panel */
+        #settings-panel {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(15, 15, 25, 0.95); border: 2px solid #333; padding: 30px; border-radius: 25px;
+            display: none; text-align: center; min-width: 280px; box-shadow: 0 0 40px rgba(0,0,0,0.8);
+        }
+
+        /* Buttons */
+        .btn { 
+            background: none; border: 1px solid #fff; color: #fff; padding: 12px 25px; 
+            margin: 10px; border-radius: 50px; transition: 0.3s; font-family: inherit; font-size: 14px;
+        }
+        .btn:hover { background: #fff; color: #000; }
+        .btn-install { background: var(--neon-blue); color: #000; border: none; font-weight: bold; display: none; }
+
+        /* Info Text */
+        .info-box { font-size: 13px; color: #aaa; background: #222; padding: 15px; border-radius: 15px; margin-top: 20px; text-align: left; line-height: 1.5; }
+        .info-box strong { color: var(--neon-blue); }
+
+        /* Animations */
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+        .loading { animation: pulse 1.5s infinite; font-size: 12px; color: #444; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="ui-layer">
+    <div class="header">
+        <a href="https://afrayakali.github.io/web" target="_blank" class="author-link pointer">AFRA YAKALI</a>
+        <div class="pointer" onclick="toggleSettings()" style="font-size: 28px;">⚙️</div>
+    </div>
+    
+    <div class="score-container" id="score-val">0</div>
+
+    <div id="settings-panel" class="pointer">
+        <h2 style="color: var(--neon-blue); letter-spacing: 2px;">AYARLAR</h2>
+        
+        <div style="margin: 20px 0;">
+            <label style="font-size: 18px; cursor:pointer;">
+                🔊 SES: <input type="checkbox" id="sound-toggle" checked style="transform: scale(1.5); margin-left: 10px;">
+            </label>
+        </div>
+
+        <button id="pwa-btn" class="btn btn-install">OYUNU YÜKLE</button>
+
+        <div class="info-box" id="ios-desc">
+            <strong>iOS (iPhone) İÇİN YÜKLEME:</strong><br>
+            1. Safari'de alttaki <strong>Paylaş</strong> (⬆️) ikonuna dokun.<br>
+            2. Menüden <strong>'Ana Ekrana Ekle'</strong> seçeneğini bul.<br>
+            3. Sağ üstten <strong>'Ekle'</strong>ye bas.
+        </div>
+
+        <button class="btn" onclick="toggleSettings()" style="border-color: var(--neon-pink); color: var(--neon-pink); margin-top: 20px;">KAPAT</button>
+        <div class="loading">Sürüm 1.0 - Neon Dynamics</div>
+    </div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score-val');
+    
+    let gameActive = true, score = 0, frame = 0, speed = 5;
+    let playerColor = 'blue'; 
+    let obstacles = [];
+
+    // --- SES SİSTEMİ ---
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playSfx(f, t = 'sine', d = 0.1) {
+        if(!document.getElementById('sound-toggle').checked) return;
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = t; o.frequency.setValueAtTime(f, audioCtx.currentTime);
+        g.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + d);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(); o.stop(audioCtx.currentTime + d);
+    }
+
+    // --- PWA & YÜKLEME ---
+    let deferredPrompt;
+    const pwaBtn = document.getElementById('pwa-btn');
+    const iosDesc = document.getElementById('ios-desc');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault(); deferredPrompt = e;
+        pwaBtn.style.display = 'inline-block';
+        iosDesc.style.display = 'none';
+    });
+
+    pwaBtn.onclick = async () => {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') pwaBtn.style.display = 'none';
+            deferredPrompt = null;
+        }
+    };
+
+    // iOS check
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.navigator.standalone;
+    if (!isIOS && !deferredPrompt) iosDesc.style.display = 'none';
+
+    function toggleSettings() {
+        const p = document.getElementById('settings-panel');
+        p.style.display = (p.style.display === 'block') ? 'none' : 'block';
+        gameActive = p.style.display !== 'block';
+        if(gameActive) loop();
+    }
+
+    // --- OYUN MOTORU ---
+    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    window.onresize = resize; resize();
+
+    const switchColor = () => {
+        if(!gameActive) return;
+        playerColor = playerColor === 'blue' ? 'pink' : 'blue';
+        playSfx(playerColor === 'blue' ? 400 : 300, 'triangle');
+    };
+    window.ontouchstart = (e) => { if(e.target.tagName !== 'BUTTON') { e.preventDefault(); switchColor(); } };
+    window.onmousedown = (e) => { if(e.target.tagName !== 'BUTTON' && e.target.tagName !== 'A') switchColor(); };
+
+    function spawn() {
+        if(frame % 70 === 0) {
+            obstacles.push({ y: -50, x: canvas.width/2, type: Math.random() > 0.5 ? 'blue' : 'pink', r: 18 });
+        }
+    }
+
+    function loop() {
+        if(!gameActive) return;
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.fillRect(0,0, canvas.width, canvas.height);
+
+        // Player Ring
+        const pCol = playerColor === 'blue' ? '#00f2ff' : '#ff00ff';
+        ctx.shadowBlur = 25; ctx.shadowColor = pCol;
+        ctx.strokeStyle = pCol; ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc(canvas.width/2, canvas.height - 120, 45, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        obstacles.forEach((o, i) => {
+            o.y += speed;
+            const oCol = o.type === 'blue' ? '#00f2ff' : '#ff00ff';
+            ctx.fillStyle = oCol; ctx.shadowBlur = 15; ctx.shadowColor = oCol;
+            ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI*2); ctx.fill();
+
+            // Collision
+            if(o.y > canvas.height - 165 && o.y < canvas.height - 75) {
+                if(o.type === playerColor) {
+                    score++; scoreEl.innerText = score;
+                    obstacles.splice(i, 1);
+                    playSfx(600, 'sine', 0.05);
+                    if(score % 10 === 0) speed += 0.4;
+                } else { endGame(); }
+            }
+            if(o.y > canvas.height) endGame();
+        });
+
+        spawn(); frame++;
+        requestAnimationFrame(loop);
+    }
+
+    function endGame() {
+        gameActive = false;
+        playSfx(100, 'sawtooth', 0.4);
+        alert("SİSTEM ÇÖKTÜ! Skorun: " + score);
+        location.reload();
+    }
+
+    loop();
+
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(()=>{});
+    }
+</script>
+</body>
+</html>
