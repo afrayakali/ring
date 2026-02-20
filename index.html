@@ -7,42 +7,38 @@
     <link rel="manifest" href="manifest.json">
     <style>
         :root { --neon-blue: #00f2ff; --neon-pink: #ff00ff; }
-        body { margin: 0; background: #000; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; touch-action: none; }
+        body { margin: 0; background: #000; color: white; font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; touch-action: none; }
         canvas { display: block; }
 
-        /* UI Layer */
+        /* UI Katmanı */
         .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
         .pointer { pointer-events: auto; cursor: pointer; }
 
-        /* Header */
+        /* Üst Menü */
         .header { display: flex; justify-content: space-between; padding: 25px; align-items: center; }
-        .author-link { color: var(--neon-blue); text-decoration: none; font-weight: bold; font-size: 16px; text-shadow: 0 0 10px var(--neon-blue); letter-spacing: 1px; }
+        .author-link { color: var(--neon-blue); text-decoration: none; font-weight: bold; font-size: 16px; text-shadow: 0 0 10px var(--neon-blue); letter-spacing: 1px; transition: 0.3s; }
+        .author-link:hover { opacity: 0.7; }
 
-        /* Score */
-        .score-container { text-align: center; margin-top: 10px; font-size: 50px; font-weight: 200; opacity: 0.6; letter-spacing: 5px; }
+        /* Skor ve Bölüm Bilgisi */
+        .stats-container { text-align: center; margin-top: 5px; pointer-events: none; }
+        .score-val { font-size: 60px; font-weight: 200; opacity: 0.9; letter-spacing: 5px; margin: 0; line-height: 1; }
+        .lvl-tag { font-size: 12px; color: #fff; background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 20px; display: inline-block; margin-bottom: 8px; letter-spacing: 2px; text-transform: uppercase; }
+        .max-score { font-size: 12px; opacity: 0.5; margin-top: 5px; letter-spacing: 1px; }
 
-        /* Settings Panel */
+        /* Ayarlar ve Pause Paneli */
         #settings-panel {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(15, 15, 25, 0.95); border: 2px solid #333; padding: 30px; border-radius: 25px;
-            display: none; text-align: center; min-width: 280px; box-shadow: 0 0 40px rgba(0,0,0,0.8);
+            background: rgba(10, 10, 20, 0.98); border: 1px solid #333; padding: 30px; border-radius: 30px;
+            display: none; text-align: center; min-width: 280px; box-shadow: 0 0 60px rgba(0,0,0,1);
         }
 
-        /* Buttons */
-        .btn { 
-            background: none; border: 1px solid #fff; color: #fff; padding: 12px 25px; 
-            margin: 10px; border-radius: 50px; transition: 0.3s; font-family: inherit; font-size: 14px;
-        }
+        .btn { background: none; border: 1px solid #fff; color: #fff; padding: 12px 30px; margin: 10px; border-radius: 50px; cursor: pointer; font-family: inherit; font-size: 14px; transition: 0.3s; }
         .btn:hover { background: #fff; color: #000; }
-        .btn-install { background: var(--neon-blue); color: #000; border: none; font-weight: bold; display: none; }
+        
+        #pause-btn { font-size: 24px; background: rgba(255,255,255,0.05); border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border: 1px solid #333; }
 
-        /* Info Text */
-        .info-box { font-size: 13px; color: #aaa; background: #222; padding: 15px; border-radius: 15px; margin-top: 20px; text-align: left; line-height: 1.5; }
+        .info-box { font-size: 12px; color: #888; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; margin-top: 20px; text-align: left; line-height: 1.6; }
         .info-box strong { color: var(--neon-blue); }
-
-        /* Animations */
-        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
-        .loading { animation: pulse 1.5s infinite; font-size: 12px; color: #444; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -50,31 +46,31 @@
 <div class="ui-layer">
     <div class="header">
         <a href="https://afrayakali.github.io/web" target="_blank" class="author-link pointer">AFRA YAKALI</a>
+        <div id="pause-btn" class="pointer" onclick="togglePause()">⏸</div>
         <div class="pointer" onclick="toggleSettings()" style="font-size: 28px;">⚙️</div>
     </div>
     
-    <div class="score-container" id="score-val">0</div>
+    <div class="stats-container">
+        <div id="lvl-display" class="lvl-tag">BÖLÜM 1: NEON CITY</div>
+        <p class="score-val" id="score-val">0</p>
+        <p class="max-score">EN YÜKSEK: <span id="max-val">0</span></p>
+    </div>
 
     <div id="settings-panel" class="pointer">
-        <h2 style="color: var(--neon-blue); letter-spacing: 2px;">AYARLAR</h2>
+        <h2 id="panel-status" style="color: var(--neon-blue); letter-spacing: 3px; margin-top: 0;">DURDURULDU</h2>
         
-        <div style="margin: 20px 0;">
-            <label style="font-size: 18px; cursor:pointer;">
-                🔊 SES: <input type="checkbox" id="sound-toggle" checked style="transform: scale(1.5); margin-left: 10px;">
+        <div style="margin: 25px 0;">
+            <label style="font-size: 18px; cursor:pointer; display: flex; align-items: center; justify-content: center;">
+                🔊 SES <input type="checkbox" id="sound-toggle" checked style="transform: scale(1.6); margin-left: 15px;">
             </label>
         </div>
 
-        <button id="pwa-btn" class="btn btn-install">OYUNU YÜKLE</button>
-
+        <button class="btn" onclick="toggleSettings()" style="border-color: var(--neon-blue); color: var(--neon-blue); width: 80%; font-weight: bold;">DEVAM ET</button>
+        
         <div class="info-box" id="ios-desc">
-            <strong>iOS (iPhone) İÇİN YÜKLEME:</strong><br>
-            1. Safari'de alttaki <strong>Paylaş</strong> (⬆️) ikonuna dokun.<br>
-            2. Menüden <strong>'Ana Ekrana Ekle'</strong> seçeneğini bul.<br>
-            3. Sağ üstten <strong>'Ekle'</strong>ye bas.
+            <strong>UYGULAMAYI YÜKLE:</strong><br>
+            iPhone/iPad kullanıyorsan Safari'de <strong>Paylaş</strong> ikonuna basıp <strong>'Ana Ekrana Ekle'</strong> diyebilirsin.
         </div>
-
-        <button class="btn" onclick="toggleSettings()" style="border-color: var(--neon-pink); color: var(--neon-pink); margin-top: 20px;">KAPAT</button>
-        <div class="loading">Sürüm 1.0 - Neon Dynamics</div>
     </div>
 </div>
 
@@ -84,118 +80,158 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const scoreEl = document.getElementById('score-val');
+    const maxEl = document.getElementById('max-val');
+    const lvlEl = document.getElementById('lvl-display');
+    const pauseBtn = document.getElementById('pause-btn');
     
-    let gameActive = true, score = 0, frame = 0, speed = 5;
-    let playerColor = 'blue'; 
-    let obstacles = [];
+    let gameActive = true;
+    let isPaused = false;
+    let score = 0;
+    let level = 1;
+    let maxScore = localStorage.getItem('afraMaxScore') || 0;
+    maxEl.innerText = maxScore;
 
-    // --- SES SİSTEMİ ---
+    let frame = 0, speed = 5, spawnRate = 80;
+    let playerColorIndex = 0; 
+
+    // BÖLÜM TEMALARI (Renk Mantığı)
+    const themes = [
+        { name: "NEON CITY", colors: ['#00f2ff', '#ff00ff'], bg: 'rgba(0,0,0,0.25)' },
+        { name: "BIOHAZARD", colors: ['#39ff14', '#ffff00'], bg: 'rgba(5,15,5,0.25)' },
+        { name: "VOLCANO", colors: ['#ff4e00', '#7a00ff'], bg: 'rgba(15,5,5,0.25)' },
+        { name: "ICE & FIRE", colors: ['#ffffff', '#ff0000'], bg: 'rgba(5,5,15,0.25)' },
+        { name: "CYBERPUNK", colors: ['#ffee00', '#00ffcc'], bg: 'rgba(10,0,10,0.25)' }
+    ];
+
+    // SES SİSTEMİ
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     function playSfx(f, t = 'sine', d = 0.1) {
         if(!document.getElementById('sound-toggle').checked) return;
-        const o = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        o.type = t; o.frequency.setValueAtTime(f, audioCtx.currentTime);
-        g.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + d);
-        o.connect(g); g.connect(audioCtx.destination);
-        o.start(); o.stop(audioCtx.currentTime + d);
+        try {
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.type = t; o.frequency.setValueAtTime(f, audioCtx.currentTime);
+            g.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + d);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(); o.stop(audioCtx.currentTime + d);
+        } catch(e) {}
     }
 
-    // --- PWA & YÜKLEME ---
-    let deferredPrompt;
-    const pwaBtn = document.getElementById('pwa-btn');
-    const iosDesc = document.getElementById('ios-desc');
-
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault(); deferredPrompt = e;
-        pwaBtn.style.display = 'inline-block';
-        iosDesc.style.display = 'none';
-    });
-
-    pwaBtn.onclick = async () => {
-        if (deferredPrompt) {
-            deferredPrompt.prompt();
-            const { outcome } = await deferredPrompt.userChoice;
-            if (outcome === 'accepted') pwaBtn.style.display = 'none';
-            deferredPrompt = null;
-        }
-    };
-
-    // iOS check
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.navigator.standalone;
-    if (!isIOS && !deferredPrompt) iosDesc.style.display = 'none';
-
-    function toggleSettings() {
-        const p = document.getElementById('settings-panel');
-        p.style.display = (p.style.display === 'block') ? 'none' : 'block';
-        gameActive = p.style.display !== 'block';
-        if(gameActive) loop();
+    function togglePause() {
+        if(!gameActive) return;
+        isPaused = !isPaused;
+        pauseBtn.innerText = isPaused ? "▶️" : "⏸";
+        document.getElementById('settings-panel').style.display = isPaused ? 'block' : 'none';
+        if(!isPaused) loop();
     }
 
-    // --- OYUN MOTORU ---
-    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    function toggleSettings() { togglePause(); }
+
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
     window.onresize = resize; resize();
 
+    let obstacles = [];
+
+    // RENK DEĞİŞTİRME MANTIĞI
     const switchColor = () => {
-        if(!gameActive) return;
-        playerColor = playerColor === 'blue' ? 'pink' : 'blue';
-        playSfx(playerColor === 'blue' ? 400 : 300, 'triangle');
+        if(!gameActive || isPaused) return;
+        playerColorIndex = playerColorIndex === 0 ? 1 : 0;
+        playSfx(350 + (playerColorIndex * 100), 'triangle', 0.08);
     };
-    window.ontouchstart = (e) => { if(e.target.tagName !== 'BUTTON') { e.preventDefault(); switchColor(); } };
-    window.onmousedown = (e) => { if(e.target.tagName !== 'BUTTON' && e.target.tagName !== 'A') switchColor(); };
+
+    // Giriş Kontrolleri
+    window.ontouchstart = (e) => { if(!e.target.closest('.pointer')) { e.preventDefault(); switchColor(); } };
+    window.onmousedown = (e) => { if(!e.target.closest('.pointer')) switchColor(); };
 
     function spawn() {
-        if(frame % 70 === 0) {
-            obstacles.push({ y: -50, x: canvas.width/2, type: Math.random() > 0.5 ? 'blue' : 'pink', r: 18 });
+        if(frame % spawnRate === 0) {
+            obstacles.push({
+                y: -50,
+                x: canvas.width / 2,
+                type: Math.random() > 0.5 ? 0 : 1,
+                r: 20
+            });
         }
     }
 
     function loop() {
-        if(!gameActive) return;
-        ctx.fillStyle = 'rgba(0,0,0,0.25)';
-        ctx.fillRect(0,0, canvas.width, canvas.height);
+        if(!gameActive || isPaused) return;
+        
+        let currentTheme = themes[(level - 1) % themes.length];
+        ctx.fillStyle = currentTheme.bg;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Player Ring
-        const pCol = playerColor === 'blue' ? '#00f2ff' : '#ff00ff';
-        ctx.shadowBlur = 25; ctx.shadowColor = pCol;
-        ctx.strokeStyle = pCol; ctx.lineWidth = 6;
+        // Oyuncu Halkası (Hedef)
+        let pCol = currentTheme.colors[playerColorIndex];
+        ctx.shadowBlur = 30; ctx.shadowColor = pCol;
+        ctx.strokeStyle = pCol; ctx.lineWidth = 8;
         ctx.beginPath();
-        ctx.arc(canvas.width/2, canvas.height - 120, 45, 0, Math.PI*2);
+        ctx.arc(canvas.width / 2, canvas.height - 130, 48, 0, Math.PI * 2);
         ctx.stroke();
         ctx.shadowBlur = 0;
 
         obstacles.forEach((o, i) => {
             o.y += speed;
-            const oCol = o.type === 'blue' ? '#00f2ff' : '#ff00ff';
-            ctx.fillStyle = oCol; ctx.shadowBlur = 15; ctx.shadowColor = oCol;
-            ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI*2); ctx.fill();
+            let oCol = currentTheme.colors[o.type];
+            
+            ctx.fillStyle = oCol;
+            ctx.shadowBlur = 15; ctx.shadowColor = oCol;
+            ctx.beginPath();
+            ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2);
+            ctx.fill();
 
-            // Collision
-            if(o.y > canvas.height - 165 && o.y < canvas.height - 75) {
-                if(o.type === playerColor) {
-                    score++; scoreEl.innerText = score;
+            // Çarpışma Bölgesi (Halkaya değdiği an)
+            if(o.y > canvas.height - 180 && o.y < canvas.height - 80) {
+                if(o.type === playerColorIndex) {
+                    score++;
+                    scoreEl.innerText = score;
                     obstacles.splice(i, 1);
-                    playSfx(600, 'sine', 0.05);
-                    if(score % 10 === 0) speed += 0.4;
+                    playSfx(600 + (score * 2), 'sine', 0.05);
+
+                    // Bölüm Atlatma (Her 15 Skor)
+                    if(score % 15 === 0) {
+                        level++;
+                        let nextTheme = themes[(level - 1) % themes.length];
+                        lvlEl.innerText = `BÖLÜM ${level}: ${nextTheme.name}`;
+                        speed += 0.5;
+                        spawnRate = Math.max(35, spawnRate - 5);
+                        playSfx(880, 'square', 0.2);
+                    }
+
+                    // Max Skor Güncelleme
+                    if(score > maxScore) {
+                        maxScore = score;
+                        maxEl.innerText = maxScore;
+                        localStorage.setItem('afraMaxScore', maxScore);
+                    }
                 } else { endGame(); }
             }
+            // Kaçırma Kontrolü
             if(o.y > canvas.height) endGame();
         });
 
-        spawn(); frame++;
+        spawn();
+        frame++;
         requestAnimationFrame(loop);
     }
 
     function endGame() {
         gameActive = false;
-        playSfx(100, 'sawtooth', 0.4);
-        alert("SİSTEM ÇÖKTÜ! Skorun: " + score);
-        location.reload();
+        playSfx(100, 'sawtooth', 0.5);
+        setTimeout(() => {
+            alert(`SİSTEM KİLİTLENDİ!\n\nSkor: ${score}\nBölüm: ${level}\nRekor: ${maxScore}`);
+            location.reload();
+        }, 100);
     }
 
+    // Başlat
     loop();
 
+    // PWA Service Worker (Çevrimdışı destek)
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js').catch(()=>{});
     }
